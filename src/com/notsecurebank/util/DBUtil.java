@@ -244,8 +244,10 @@ public class DBUtil {
             return null;
 
         Connection connection = getConnection();
-        Statement statement = connection.createStatement();
-        ResultSet resultSet = statement.executeQuery("SELECT ACCOUNT_ID, ACCOUNT_NAME, BALANCE FROM ACCOUNTS WHERE USERID = '" + username + "' ");
+        PreparedStatement statement = connection.prepareStatement("SELECT ACCOUNT_ID, ACCOUNT_NAME, BALANCE FROM ACCOUNTS" +
+                " WHERE USERID = ?");
+        statement.setString(1, username);
+        ResultSet resultSet = statement.executeQuery();
 
         ArrayList<Account> accounts = new ArrayList<Account>(3);
         while (resultSet.next()) {
@@ -306,7 +308,20 @@ public class DBUtil {
                 debitAmount = -debitAmount;
 
             // create transaction record
-            statement.execute("INSERT INTO TRANSACTIONS (ACCOUNTID, DATE, TYPE, AMOUNT) VALUES (" + debitAccount.getAccountId() + ",'" + date + "'," + ((debitAccount.getAccountId() == userCC) ? "'Cash Advance'" : "'Withdrawal'") + "," + debitAmount + ")," + "(" + creditAccount.getAccountId() + ",'" + date + "'," + ((creditAccount.getAccountId() == userCC) ? "'Payment'" : "'Deposit'") + "," + creditAmount + ")");
+            PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO TRANSACTIONS (ACCOUNTID, DATE, TYPE, AMOUNT)" +
+                    " VALUES (?, ?, ?, ?), (?, ?, ?, ?)");
+
+            preparedStatement.setInt(1, (int) debitAccount.getAccountId());
+            preparedStatement.setTimestamp(2, date);
+            preparedStatement.setString(3, (debitAccount.getAccountId() == userCC) ? "Cash Advance" : "Withdrawal");
+            preparedStatement.setDouble(4, debitAmount);
+
+            preparedStatement.setInt(5, (int) creditAccount.getAccountId());
+            preparedStatement.setTimestamp(6, date);
+            preparedStatement.setString(7, (creditAccount.getAccountId() == userCC) ? "Payment" : "Deposit");
+            preparedStatement.setDouble(8, creditAmount);
+
+            preparedStatement.executeUpdate();
 
             LOG.info("Debit: " + debitAccount.getAccountId() + " - " + debitAccount.getAccountName() + ", Credit: " + creditAccount.getAccountId() + " - " + creditAccount.getAccountName() + ", Amount: " + amount);
 
@@ -316,14 +331,28 @@ public class DBUtil {
             // add cash advance fee since the money transfer was made from the
             // credit card
             if (debitAccount.getAccountId() == userCC) {
-                statement.execute("INSERT INTO TRANSACTIONS (ACCOUNTID, DATE, TYPE, AMOUNT) VALUES (" + debitAccount.getAccountId() + ",'" + date + "','Cash Advance Fee'," + CASH_ADVANCE_FEE + ")");
+                preparedStatement = connection.prepareStatement("INSERT INTO TRANSACTIONS (ACCOUNTID, DATE, TYPE, AMOUNT) VALUES (?, ?, ?, ?)");
+
+                preparedStatement.setInt(1, (int) debitAccount.getAccountId());
+                preparedStatement.setTimestamp(2, date);
+                preparedStatement.setString(3, "Cash Advance Fee");
+                preparedStatement.setDouble(4, CASH_ADVANCE_FEE);
+
+                preparedStatement.executeUpdate();
                 debitAmount += CASH_ADVANCE_FEE;
                 LOG.info("Cash advance fee. Credit Card: " + String.valueOf(userCC) + ", Fee: " + CASH_ADVANCE_FEE);
             }
 
             // update account balances
-            statement.execute("UPDATE ACCOUNTS SET BALANCE = " + (debitAccount.getBalance() + debitAmount) + " WHERE ACCOUNT_ID = " + debitAccount.getAccountId());
-            statement.execute("UPDATE ACCOUNTS SET BALANCE = " + (creditAccount.getBalance() + creditAmount) + " WHERE ACCOUNT_ID = " + creditAccount.getAccountId());
+            PreparedStatement preparedStatementDebit = connection.prepareStatement("UPDATE ACCOUNTS SET BALANCE = ? WHERE ACCOUNT_ID = ?");
+            preparedStatementDebit.setDouble(1, debitAccount.getBalance() + debitAmount);
+            preparedStatementDebit.setInt(2, (int) debitAccount.getAccountId());
+            preparedStatementDebit.executeUpdate();
+
+            PreparedStatement preparedStatementCredit = connection.prepareStatement("UPDATE ACCOUNTS SET BALANCE = ? WHERE ACCOUNT_ID = ?");
+            preparedStatementCredit.setDouble(1, creditAccount.getBalance() + creditAmount);
+            preparedStatementCredit.setInt(2, (int) creditAccount.getAccountId());
+            preparedStatementCredit.executeUpdate();
 
             return null;
 
@@ -362,11 +391,23 @@ public class DBUtil {
             dateString = "DATE < '" + endDate + " 23:59:59'";
         }
 
-        String query = "SELECT * FROM TRANSACTIONS WHERE (" + acctIds.toString() + ") " + ((dateString == null) ? "" : "AND (" + dateString + ") ") + "ORDER BY DATE DESC";
+        StringBuilder queryBuilder = new StringBuilder("SELECT * FROM TRANSACTIONS WHERE ");
+        queryBuilder.append(acctIds.toString());
+
+        if (dateString != null) {
+            queryBuilder.append(" AND (").append(dateString).append(")");
+        }
+
+        queryBuilder.append(" ORDER BY DATE DESC");
+
+        PreparedStatement preparedStatement = connection.prepareStatement(queryBuilder.toString());
         ResultSet resultSet = null;
 
+
         try {
-            resultSet = statement.executeQuery(query);
+            resultSet = preparedStatement.executeQuery();
+            statement.close();
+            connection.close();
         } catch (SQLException e) {
             LOG.error(e.toString());
 
@@ -417,8 +458,9 @@ public class DBUtil {
         LOG.debug("getAccount(" + accountNo + ")");
 
         Connection connection = getConnection();
-        Statement statement = connection.createStatement();
-        ResultSet resultSet = statement.executeQuery("SELECT ACCOUNT_NAME, BALANCE FROM ACCOUNTS WHERE ACCOUNT_ID = " + accountNo + " ");
+        PreparedStatement preparedStatement = connection.prepareStatement("SELECT ACCOUNT_NAME, BALANCE FROM ACCOUNTS WHERE ACCOUNT_ID = ?");
+        preparedStatement.setInt(1, (int) accountNo);
+        ResultSet resultSet = preparedStatement.executeQuery();
 
         ArrayList<Account> accounts = new ArrayList<Account>(3);
         while (resultSet.next()) {
@@ -439,8 +481,13 @@ public class DBUtil {
 
         try {
             Connection connection = getConnection();
-            Statement statement = connection.createStatement();
-            statement.execute("INSERT INTO ACCOUNTS (USERID,ACCOUNT_NAME,BALANCE) VALUES ('" + username + "','" + acctType + "', 0)");
+
+
+            PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO ACCOUNTS (USERID,ACCOUNT_NAME,BALANCE) " +
+                    "VALUES (?,?,0)");
+            preparedStatement.setString(1, username);
+            preparedStatement.setString(2, acctType);
+            preparedStatement.execute();
             return null;
         } catch (SQLException e) {
             LOG.error(e.toString());
@@ -453,8 +500,15 @@ public class DBUtil {
 
         try {
             Connection connection = getConnection();
-            Statement statement = connection.createStatement();
-            statement.execute("INSERT INTO SPECIAL_CUSTOMERS (USER_ID,PASSWORD,FIRST_NAME,LAST_NAME,ROLE) VALUES ('" + username + "','" + password + "', '" + firstname + "', '" + lastname + "','user')");
+
+            PreparedStatement preparedStatement =
+                    connection.prepareStatement("INSERT INTO SPECIAL_CUSTOMERS (USER_ID,PASSWORD,FIRST_NAME,LAST_NAME,ROLE) " +
+                            "VALUES (?,?,?,?,'user')");
+            preparedStatement.setString(1, username);
+            preparedStatement.setString(2, password);
+            preparedStatement.setString(3, firstname);
+            preparedStatement.setString(4, lastname);
+            preparedStatement.execute();
             return null;
         } catch (SQLException e) {
             LOG.error(e.toString());
@@ -467,8 +521,15 @@ public class DBUtil {
 
         try {
             Connection connection = getConnection();
-            Statement statement = connection.createStatement();
-            statement.execute("INSERT INTO PEOPLE (USER_ID,PASSWORD,FIRST_NAME,LAST_NAME,ROLE,EMAIL) VALUES ('" + username + "','" + password + "', '" + firstname + "', '" + lastname + "','user', '" + email + "')");
+
+            PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO PEOPLE (USER_ID,PASSWORD,FIRST_NAME,LAST_NAME,ROLE,EMAIL) " +
+                    "VALUES (?,?,?,?,?,?)");
+            preparedStatement.setString(1, username);
+            preparedStatement.setString(2, password);
+            preparedStatement.setString(3, firstname);
+            preparedStatement.setString(4, lastname);
+            preparedStatement.setString(5, "user");
+            preparedStatement.setString(6, email);
             return null;
         } catch (SQLException e) {
             LOG.error(e.toString());
@@ -481,8 +542,10 @@ public class DBUtil {
 
         try {
             Connection connection = getConnection();
-            Statement statement = connection.createStatement();
-            statement.execute("UPDATE PEOPLE SET PASSWORD = '" + password + "' WHERE USER_ID = '" + username + "'");
+            PreparedStatement preparedStatement = connection.prepareStatement("UPDATE PEOPLE SET PASSWORD = ? WHERE USER_ID = ?");
+            preparedStatement.setString(1, password);
+            preparedStatement.setString(2, username);
+            preparedStatement.executeUpdate();
             return null;
         } catch (SQLException e) {
             LOG.error(e.toString());
@@ -495,9 +558,14 @@ public class DBUtil {
 
         try {
             Connection connection = getConnection();
-            Statement statement = connection.createStatement();
-            statement.execute("INSERT INTO FEEDBACK (NAME,EMAIL,SUBJECT,COMMENTS) VALUES ('" + name + "', '" + email + "', '" + subject + "', '" + comments + "')", Statement.RETURN_GENERATED_KEYS);
-            ResultSet rs = statement.getGeneratedKeys();
+            PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO FEEDBACK (NAME, EMAIL, SUBJECT, COMMENTS) VALUES (?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
+            preparedStatement.setString(1, name);
+            preparedStatement.setString(2, email);
+            preparedStatement.setString(3, subject);
+            preparedStatement.setString(4, comments);
+            preparedStatement.executeUpdate();
+
+            ResultSet rs = preparedStatement.getGeneratedKeys();
             long id = -1;
             if (rs.next()) {
                 id = rs.getLong(1);
