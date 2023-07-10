@@ -9,6 +9,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 
+import com.notsecurebank.model.User;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.wink.json4j.JSONException;
@@ -34,6 +35,10 @@ public class AdminAPI extends NotSecureBankAPI {
         if (!ServletUtil.isLoggedin(request)) {
             String response = "{\"loggedIn\" : \"false\"}";
             return Response.status(400).entity(response).build();
+        }
+        if(!ServletUtil.getUser(request).getRole().equals(User.Role.Admin)){
+            String response = "{\"error\" : \"You are not authorized to perform this action.\"}";
+            return Response.status(401).entity(response).build();
         }
 
         // Convert request to JSON
@@ -83,6 +88,10 @@ public class AdminAPI extends NotSecureBankAPI {
         if (!ServletUtil.isLoggedin(request)) {
             String response = "{\"loggedIn\" : \"false\"}";
             return Response.status(400).entity(response).build();
+        }
+        if(!ServletUtil.getUser(request).getRole().equals(User.Role.Admin)){
+            String response = "{\"error\" : \"You are not authorized to perform this action.\"}";
+            return Response.status(401).entity(response).build();
         }
 
         String firstname;
