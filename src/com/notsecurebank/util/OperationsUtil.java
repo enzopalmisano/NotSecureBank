@@ -1,5 +1,6 @@
 package com.notsecurebank.util;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -30,12 +31,22 @@ public class OperationsUtil {
             Cookie[] cookies = request.getCookies();
 
             Cookie notSecureBankCookie = null;
-
+            String csrfCookie = null;
             for (Cookie cookie : cookies) {
                 if (ServletUtil.NOT_SECURE_BANK_COOKIE.equals(cookie.getName())) {
                     notSecureBankCookie = cookie;
                     break;
                 }
+                if (cookie.getName().equals("csrf")) {
+                    csrfCookie = cookie.getValue();
+                }
+            }
+            String csrfField = request.getParameter("csrfToken");
+
+            // validate CSRF
+            if (csrfCookie == null || !csrfCookie.equals(csrfField)) {
+                return "CSRF token is invalid";
+
             }
 
             Account[] cookieAccounts = null;
