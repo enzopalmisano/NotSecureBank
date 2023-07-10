@@ -4,10 +4,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -276,5 +275,26 @@ public class ServletUtil {
         String specialPrizeCode = UUID.randomUUID().toString();
         request.getSession().setAttribute("specialPrizeCode", specialPrizeCode);
         return specialPrizeCode;
+    }
+
+    public static List<String> allowedPath() {
+        List<String> allowedPath;
+        allowedPath = Arrays.stream(Objects.requireNonNull(new File("/static/").listFiles()))
+                .filter(file -> !file.isDirectory())
+                .map(File::getName)
+                .filter(name -> name.endsWith(".htm"))
+                .collect(Collectors.toList());
+        allowedPath.addAll(Arrays.stream(Objects.requireNonNull(new File("/static/jobs/").listFiles()))
+                .filter(file -> !file.isDirectory())
+                .map(File::getName)
+                .filter(name -> name.endsWith(".htm"))
+                .collect(Collectors.toList()));
+        allowedPath.addAll(Arrays.stream(Objects.requireNonNull(new File("/static/pr/").listFiles()))
+                .filter(file -> !file.isDirectory())
+                .map(File::getName)
+                .filter(name -> name.endsWith(".htm"))
+                .collect(Collectors.toList()));
+
+        return allowedPath;
     }
 }
