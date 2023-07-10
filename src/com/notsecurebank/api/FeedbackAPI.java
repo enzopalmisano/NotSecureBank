@@ -9,6 +9,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.wink.json4j.JSONException;
@@ -57,13 +58,13 @@ public class FeedbackAPI extends NotSecureBankAPI {
         String feedbackId = OperationsUtil.sendFeedback(name, email, subject, comments);
 
         if (feedbackId != null) {
-            response = "{\"status\":\"Thank you!\",\"feedbackId\":\"" + feedbackId + "\"}";
+            response = "{\"status\":\"Thank you!\",\"feedbackId\":\"" + StringEscapeUtils.escapeJavaScript(feedbackId) + "\"}";
             try {
                 myJson = new JSONObject(response);
                 return Response.status(200).entity(myJson.toString()).build();
             } catch (JSONException e) {
                 LOG.error(e.toString());
-                return Response.status(500).entity("{\"Error\":\"Unknown internal error:" + e.getLocalizedMessage() + "\"}").build();
+                return Response.status(500).entity("{\"Error\":\"Unknown internal error:" + StringEscapeUtils.escapeHtml(e.getLocalizedMessage()) + "\"}").build();
             }
         } else {
             myJson = new JSONObject();
