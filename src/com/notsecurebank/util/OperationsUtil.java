@@ -2,6 +2,8 @@ package com.notsecurebank.util;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
+import java.util.Objects;
 
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -38,11 +40,19 @@ public class OperationsUtil {
                 }
             }
 
+            List<Account> accounts = List.of(Objects.requireNonNull(DBUtil.getAccounts(userName)));
+
             Account[] cookieAccounts = null;
             if (notSecureBankCookie == null)
                 cookieAccounts = user.getAccounts();
             else
                 cookieAccounts = Account.fromBase64List(notSecureBankCookie.getValue());
+
+            for (Account account : cookieAccounts) {
+                if (accounts.stream().noneMatch(a -> a.getAccountId() == account.getAccountId())) {
+                    throw new RuntimeException("Account not found");
+                }
+            }
 
             try {
                 accountId = Long.parseLong(accountIdString);
